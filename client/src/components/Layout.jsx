@@ -2,20 +2,21 @@ import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Navigation from './Navigation';
 import MobileMenu from './MobileMenu';
+import Footer from './Footer';
 import { motion } from 'framer-motion';
 
 const Layout = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-[#1d1d1d]">
+    <div className="min-h-screen bg-[#1d1d1d] flex flex-col">
       <Navigation onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)} />
       
       {/* Mobile Menu */}
       <MobileMenu isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
       
       {/* Main Content */}
-      <main className="pt-20 pb-8">
+      <main className="pt-20 pb-8 flex-1">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -25,6 +26,9 @@ const Layout = () => {
           <Outlet />
         </motion.div>
       </main>
+      
+      {/* Footer */}
+      <Footer />
     </div>
   );
 };

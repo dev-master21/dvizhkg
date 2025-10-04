@@ -13,6 +13,19 @@ export const handleStart = async (ctx) => {
       // This is an auth request from website
       const sessionId = startParam.replace('auth_', '');
       
+      // Check if session exists and is valid
+      const [sessions] = await pool.execute(
+        'SELECT * FROM auth_sessions WHERE session_id = ? AND expires_at > NOW()',
+        [sessionId]
+      );
+      
+      if (sessions.length === 0) {
+        return ctx.reply(
+          '❌ Ссылка для авторизации недействительна или истекла.\n\n' +
+          '🔄 Вернитесь на сайт и начните авторизацию заново.'
+        );
+      }
+      
       // Request contact
       await ctx.reply(
         '👋 Добро пожаловать в DVIZH BISHKEK!\n\n' +
@@ -99,8 +112,8 @@ export const handleContact = async (ctx) => {
       session.phoneNumber = phone_number;
       authSessions.set(ctx.from.id, session);
     } else {
-      // User is subscribed, create auth token
-      await createAuthToken(ctx, phone_number, session.sessionId);
+      // User is subscribed, create auth tokens
+      await createAuthTokens(ctx, phone_number, session.sessionId);
     }
   } catch (error) {
     console.error('Contact handler error:', error);
@@ -133,7 +146,7 @@ export const handleCheckSubscription = async (ctx) => {
         (!isChatMember ? '💬 Нужно вступить в чат\n' : '')
       );
     } else {
-      await createAuthToken(ctx, session.phoneNumber, session.sessionId);
+      await createAuthTokens(ctx, session.phoneNumber, session.sessionId);
     }
   } catch (error) {
     console.error('Check subscription error:', error);
@@ -141,11 +154,37 @@ export const handleCheckSubscription = async (ctx) => {
   }
 };
 
-async function createAuthToken(ctx, phoneNumber, sessionId) {
+async function createAuthTokens(ctx, phoneNumber, sessionId) {
   try {
     const connection = await pool.getConnection();
     
     try {
+      // Check if user already has valid auth tokens for this session
+      const [existingTokens] = await connection.execute(
+        `SELECT * FROM auth_tokens 
+         WHERE session_id = ? AND expires_at > NOW() AND used = FALSE`,
+        [sessionId]
+      );
+      
+      if (existingTokens.length > 0) {
+        // Tokens already exist, just send the URL
+        const urlToken = existingTokens.find(t => t.token_type === 'url');
+        if (urlToken) {
+          const authUrl = `${process.env.SITE_URL}/auth-callback?session=${sessionId}&token=${urlToken.token}`;
+          
+          await ctx.reply(
+            '✅ Вы уже авторизованы!\n\n' +
+            '🌐 Нажмите кнопку ниже чтобы войти на сайт:',
+            Markup.inlineKeyboard([
+              [Markup.button.url('🚀 Войти на сайт DVIZH', authUrl)]
+            ])
+          );
+          
+          authSessions.delete(ctx.from.id);
+          return;
+        }
+      }
+      
       // Check if user exists
       const [existing] = await connection.execute(
         'SELECT * FROM users WHERE telegram_id = ?',
@@ -183,44 +222,54 @@ async function createAuthToken(ctx, phoneNumber, sessionId) {
           ]
         );
         userId = result.insertId;
-        user = {
-          id: userId,
-          telegram_id: ctx.from.id,
-          username: ctx.from.username,
-          first_name: ctx.from.first_name,
-          last_name: ctx.from.last_name,
-          phone_number: phoneNumber,
-          reputation: 0
-        };
       } else {
         user = existing[0];
         userId = user.id;
         
-        // Update phone number if needed
-        if (!user.phone_number) {
-          await connection.execute(
-            'UPDATE users SET phone_number = ? WHERE id = ?',
-            [phoneNumber, userId]
-          );
-        }
+        // Update phone number and user info if needed
+        await connection.execute(
+          `UPDATE users SET 
+           phone_number = COALESCE(phone_number, ?),
+           username = ?,
+           first_name = ?,
+           last_name = ?,
+           last_active = CURRENT_TIMESTAMP
+           WHERE id = ?`,
+          [
+            phoneNumber,
+            ctx.from.username || null,
+            ctx.from.first_name,
+            ctx.from.last_name || null,
+            userId
+          ]
+        );
       }
       
-      // Create auth token
-      const authToken = crypto.randomBytes(32).toString('hex');
+      // Create TWO auth tokens - one for immediate auth, one for URL
+      const immediateToken = crypto.randomBytes(32).toString('hex');
+      const urlToken = crypto.randomBytes(32).toString('hex');
       
-      // Store auth token in database
+      // Store both tokens
       await connection.execute(
-        'INSERT INTO auth_tokens (user_id, token, session_id, expires_at) VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 5 MINUTE))',
-        [userId, authToken, sessionId]
+        `INSERT INTO auth_tokens (user_id, token, token_type, session_id, expires_at) 
+         VALUES 
+         (?, ?, 'immediate', ?, DATE_ADD(NOW(), INTERVAL 1 MINUTE)),
+         (?, ?, 'url', ?, DATE_ADD(NOW(), INTERVAL 1 MINUTE))`,
+        [userId, immediateToken, sessionId, userId, urlToken, sessionId]
       );
       
-      // Send success message
+      // Build auth URL with token
+      const authUrl = `${process.env.SITE_URL}/auth-callback?session=${sessionId}&token=${urlToken}`;
+      
+      // Send success message with URL containing token
       await ctx.reply(
-        '✅ Отлично! Вы успешно авторизованы!\n\n' +
-        '🌐 Вернитесь на сайт и нажмите кнопку "Продолжить"\n\n' +
-        '⏰ У вас есть 5 минут чтобы завершить авторизацию на сайте',
+        '✅ Отлично! Авторизация прошла успешно!\n\n' +
+        '🌐 Вы можете:\n' +
+        '1. Вернуться в браузер где начали авторизацию - она завершится автоматически\n' +
+        '2. Или нажать кнопку ниже чтобы войти прямо отсюда\n\n' +
+        '⏰ Ссылка действительна 1 минуту',
         Markup.inlineKeyboard([
-          [Markup.button.url('🌐 Перейти на сайт', process.env.SITE_URL)]
+          [Markup.button.url('🚀 Войти на сайт DVIZH', authUrl)]
         ])
       );
       
@@ -230,7 +279,7 @@ async function createAuthToken(ctx, phoneNumber, sessionId) {
       connection.release();
     }
   } catch (error) {
-    console.error('Create auth token error:', error);
+    console.error('Create auth tokens error:', error);
     throw error;
   }
 }

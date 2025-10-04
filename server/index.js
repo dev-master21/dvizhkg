@@ -5,6 +5,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer } from 'http';
 
+// Import database pool for cleanup
+import { pool } from './services/database.js';
+
 // Import routes
 import authRoutes from './routes/auth.js';
 import eventsRoutes from './routes/events.js';
@@ -84,18 +87,98 @@ app.get('/api/health', (req, res) => {
 // Error handling
 app.use(errorHandler);
 
+// Clean up expired auth sessions and tokens periodically
+const cleanupExpiredAuth = async () => {
+  try {
+    // Clean expired auth sessions
+    const [sessionsResult] = await pool.execute(
+      'DELETE FROM auth_sessions WHERE expires_at < NOW()'
+    );
+    
+    // Clean expired auth tokens
+    const [tokensResult] = await pool.execute(
+      'DELETE FROM auth_tokens WHERE expires_at < NOW()'
+    );
+    
+    // Clean expired user sessions (JWT sessions)
+    const [userSessionsResult] = await pool.execute(
+      'DELETE FROM sessions WHERE expires_at < NOW()'
+    );
+    
+    const totalDeleted = 
+      (sessionsResult.affectedRows || 0) + 
+      (tokensResult.affectedRows || 0) + 
+      (userSessionsResult.affectedRows || 0);
+    
+    if (totalDeleted > 0) {
+      console.log(`✅ Cleaned up expired auth data: ${totalDeleted} records`);
+    }
+  } catch (error) {
+    console.error('❌ Auth cleanup error:', error);
+  }
+};
+
+// Run cleanup on startup
+cleanupExpiredAuth();
+
+// Schedule cleanup every hour
+const cleanupInterval = setInterval(cleanupExpiredAuth, 60 * 60 * 1000);
+
+// Also run more frequent cleanup for auth tokens (every 5 minutes)
+// since they expire quickly (1 minute lifetime)
+const tokenCleanupInterval = setInterval(async () => {
+  try {
+    const [result] = await pool.execute(
+      'DELETE FROM auth_tokens WHERE expires_at < NOW()'
+    );
+    if (result.affectedRows > 0) {
+      console.log(`🔄 Cleaned ${result.affectedRows} expired auth tokens`);
+    }
+  } catch (error) {
+    console.error('Token cleanup error:', error);
+  }
+}, 5 * 60 * 1000); // Every 5 minutes
+
 // Start server
 const PORT = process.env.PORT || 1312;
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`📍 CORS enabled for: https://dvizh.kg, https://www.dvizh.kg`);
+  console.log(`🔄 Auth cleanup scheduled: hourly for sessions, every 5 min for tokens`);
 });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('SIGTERM signal received: closing HTTP server');
+  
+  // Clear intervals
+  clearInterval(cleanupInterval);
+  clearInterval(tokenCleanupInterval);
+  
   server.close(() => {
     console.log('HTTP server closed');
+    // Close database connections
+    pool.end().then(() => {
+      console.log('Database connections closed');
+      process.exit(0);
+    });
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT signal received: closing HTTP server');
+  
+  // Clear intervals
+  clearInterval(cleanupInterval);
+  clearInterval(tokenCleanupInterval);
+  
+  server.close(() => {
+    console.log('HTTP server closed');
+    // Close database connections  
+    pool.end().then(() => {
+      console.log('Database connections closed');
+      process.exit(0);
+    });
   });
 });

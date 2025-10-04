@@ -4,9 +4,15 @@ import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion'
 import { 
   ChevronDown, Calendar, Trophy, Image, Star,
   Sparkles, Zap, Users, ArrowRight, Play,
-  MessageCircle, MapPin, Clock
+  MessageCircle, MapPin, Clock, ChevronLeft, ChevronRight as ChevronRightIcon,
+  Lock, Video
 } from 'lucide-react';
 import { useQuery } from 'react-query';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import { Navigation, Pagination, Autoplay } from 'swiper/modules';
+import 'swiper/css';
+import 'swiper/css/navigation';
+import 'swiper/css/pagination';
 import axios from '../utils/axios';
 import { useAuthStore } from '../stores/authStore';
 import EventCard from '../components/EventCard';
@@ -17,15 +23,16 @@ const Home = () => {
   const videoRef = useRef(null);
   const { isAuthenticated } = useAuthStore();
   const [videoLoaded, setVideoLoaded] = useState(false);
+  const [selectedMedia, setSelectedMedia] = useState(null);
   
   const { scrollYProgress } = useScroll();
   const heroOpacity = useTransform(scrollYProgress, [0, 0.3], [1, 0]);
   const heroScale = useTransform(scrollYProgress, [0, 0.3], [1, 0.8]);
   
-  // Load events
+  // Load ALL events (upcoming + completed)
   const { data: events = [] } = useQuery(
     ['homeEvents'],
-    () => axios.get('/api/events/public').then(res => res.data.slice(0, 6))
+    () => axios.get('/api/events/public').then(res => res.data)
   );
   
   // Load top users
@@ -34,8 +41,17 @@ const Home = () => {
     () => axios.get('/api/users/top/public').then(res => res.data)
   );
 
+  // Load media files
+  const { data: mediaItems = [] } = useQuery(
+    ['homeMedia'],
+    () => axios.get('/api/media/public').then(res => res.data.slice(0, 8)),
+    { 
+      enabled: true,
+      retry: 1 
+    }
+  );
+
   useEffect(() => {
-    // Auto-play video when loaded
     if (videoRef.current) {
       videoRef.current.play().catch(err => console.log('Video autoplay failed:', err));
     }
@@ -50,12 +66,11 @@ const Home = () => {
 
   return (
     <div className="relative min-h-screen bg-[#0a0a0a]">
-      {/* Hero Section with Video */}
+      {/* Hero Section - остается без изменений */}
       <motion.section 
         className="relative h-screen flex items-center justify-center overflow-hidden"
         style={{ opacity: heroOpacity, scale: heroScale }}
       >
-        {/* Video Background */}
         <div className="absolute inset-0 z-0">
           <video
             ref={videoRef}
@@ -67,26 +82,16 @@ const Home = () => {
             onLoadedData={() => setVideoLoaded(true)}
           >
             <source src="/hero-video.mp4" type="video/mp4" />
-            {/* Fallback to gradient if video doesn't load */}
           </video>
-          
-          {/* Dark overlay */}
           <div className="absolute inset-0 bg-black/60" />
-          
-          {/* Gradient overlay */}
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/30 to-black" />
         </div>
 
-        {/* Hero Content */}
         <div className="relative z-10 text-center px-4 pb-20">
           <motion.div
             initial={{ scale: 0, rotate: -180 }}
             animate={{ scale: 1, rotate: 0 }}
-            transition={{ 
-              duration: 1, 
-              type: "spring",
-              stiffness: 100
-            }}
+            transition={{ duration: 1, type: "spring", stiffness: 100 }}
             className="mb-8"
           >
             <img 
@@ -101,12 +106,6 @@ const Home = () => {
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.5, duration: 0.8 }}
             className="text-6xl md:text-8xl font-black text-white mb-6 uppercase"
-            style={{
-              background: 'linear-gradient(to bottom, #ffffff, #ffffff)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-            }}
           >
             ТУТ ЛУЧШИЙ ВАЙБ
           </motion.h1>
@@ -157,7 +156,6 @@ const Home = () => {
           </motion.div>
         </div>
 
-        {/* Scroll indicator - Поднял выше, изменил bottom-12 на bottom-20 */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -175,7 +173,6 @@ const Home = () => {
           </motion.div>
         </motion.div>
 
-        {/* Animated particles */}
         <div className="absolute inset-0 pointer-events-none">
           {[...Array(20)].map((_, i) => (
             <motion.div
@@ -200,7 +197,7 @@ const Home = () => {
         </div>
       </motion.section>
 
-      {/* Events Section */}
+      {/* Events Carousel Section */}
       <section className="relative py-20 px-4 bg-gradient-to-b from-black to-[#0a0a0a]">
         <div className="container mx-auto">
           <motion.div
@@ -210,28 +207,67 @@ const Home = () => {
             className="text-center mb-12"
           >
             <h2 className="text-5xl md:text-6xl font-black text-white mb-4 uppercase">
-              БЛИЖАЙШИЕ СОБЫТИЯ
+              НАШИ ДВИЖУХИ
             </h2>
             <p className="text-xl text-gray-400 uppercase">
-              НЕ ПРОПУСТИ САМЫЕ ЯРКИЕ ДВИЖУХИ
+              ПРОШЕДШИЕ И БУДУЩИЕ СОБЫТИЯ
             </p>
           </motion.div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-            {events.slice(0, 6).map((event, index) => (
-              <motion.div
-                key={event.id}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.1 }}
+          {events.length > 0 ? (
+            <div className="relative">
+              <Swiper
+                modules={[Navigation, Pagination, Autoplay]}
+                spaceBetween={30}
+                slidesPerView={1}
+                navigation={{
+                  prevEl: '.swiper-button-prev-custom',
+                  nextEl: '.swiper-button-next-custom'
+                }}
+                pagination={{ 
+                  clickable: true,
+                  bulletClass: 'swiper-pagination-bullet !bg-gray-600',
+                  bulletActiveClass: 'swiper-pagination-bullet-active !bg-[#f9c200]'
+                }}
+                autoplay={{
+                  delay: 5000,
+                  disableOnInteraction: false
+                }}
+                breakpoints={{
+                  640: {
+                    slidesPerView: 2,
+                    spaceBetween: 20
+                  },
+                  1024: {
+                    slidesPerView: 3,
+                    spaceBetween: 30
+                  }
+                }}
+                className="!pb-12"
               >
-                <EventCard event={event} index={index} />
-              </motion.div>
-            ))}
-          </div>
+                {events.map((event, index) => (
+                  <SwiperSlide key={event.id}>
+                    <motion.div
+                      initial={{ opacity: 0, y: 30 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: index * 0.1 }}
+                    >
+                      <EventCard event={event} index={index} />
+                    </motion.div>
+                  </SwiperSlide>
+                ))}
+              </Swiper>
 
-          {events.length === 0 && (
+              {/* Custom Navigation Buttons */}
+              <button className="swiper-button-prev-custom absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-10 p-2 bg-[#f9c200] text-black rounded-full hover:bg-[#ffdd44] transition">
+                <ChevronLeft size={24} />
+              </button>
+              <button className="swiper-button-next-custom absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-10 p-2 bg-[#f9c200] text-black rounded-full hover:bg-[#ffdd44] transition">
+                <ChevronRightIcon size={24} />
+              </button>
+            </div>
+          ) : (
             <motion.div
               initial={{ opacity: 0 }}
               whileInView={{ opacity: 1 }}
@@ -252,7 +288,7 @@ const Home = () => {
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-center"
+            className="text-center mt-12"
           >
             <Link
               to="/events"
@@ -266,7 +302,7 @@ const Home = () => {
         </div>
       </section>
 
-      {/* Top Users Section */}
+      {/* Top Users Section - остается без изменений */}
       <section className="relative py-20 px-4">
         <div className="container mx-auto max-w-4xl">
           <motion.div
@@ -293,7 +329,7 @@ const Home = () => {
         </div>
       </section>
 
-      {/* Media Section - Уменьшил отступы еще больше */}
+      {/* Media Section с реальными файлами */}
       <section className="relative py-20 px-4 bg-gradient-to-b from-[#0a0a0a] to-black">
         <div className="container mx-auto">
           <motion.div
@@ -305,30 +341,77 @@ const Home = () => {
             <h2 className="text-5xl md:text-6xl font-black text-white mb-4 uppercase">
               ФОТОЧКИ С ДВИЖУХ
             </h2>
-            <p className="text-xl text-gray-400 mb-4 uppercase">
+            <p className="text-xl text-gray-400 mb-8 uppercase">
               ФОТО И ВИДЕО С НАШИХ ЯРКИХ И НЕЗАБЫВАЕМЫХ ВСТРЕЧ
             </p>
 
             <div className="relative max-w-4xl mx-auto">
-              {/* Media Preview Grid - Уменьшил mb-8 до mb-4 */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[...Array(8)].map((_, i) => (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    whileInView={{ opacity: 1, scale: 1 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: i * 0.05 }}
-                    className="aspect-square bg-gradient-to-br from-[#f9c200]/20 to-[#f9c200]/5 rounded-2xl flex items-center justify-center"
-                  >
-                    <Image className="text-[#f9c200]/50" size={40} />
-                  </motion.div>
-                ))}
+                {mediaItems.length > 0 ? (
+                  mediaItems.map((item, i) => (
+                    <motion.div
+                      key={item.id || i}
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      whileInView={{ opacity: 1, scale: 1 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: i * 0.05 }}
+                      className={`relative aspect-square rounded-2xl overflow-hidden ${
+                        !isAuthenticated ? 'cursor-not-allowed' : 'cursor-pointer'
+                      }`}
+                      onClick={() => isAuthenticated && navigate('/media')}
+                    >
+                      {item.type === 'video' ? (
+                        <>
+                          <video
+                            src={`${import.meta.env.VITE_API_URL}${item.url || item.file_url}`}
+                            className={`w-full h-full object-cover ${
+                              !isAuthenticated ? 'filter blur-sm' : ''
+                            }`}
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <Video className="text-white/50" size={32} />
+                          </div>
+                        </>
+                      ) : (
+                        <img
+                          src={`${import.meta.env.VITE_API_URL}${item.thumbnail_url || item.url || item.file_url}`}
+                          alt=""
+                          className={`w-full h-full object-cover ${
+                            !isAuthenticated ? 'filter blur-sm' : ''
+                          }`}
+                        />
+                      )}
+                      
+                      {!isAuthenticated && (
+                        <div className="absolute inset-0 bg-black/40" />
+                      )}
+                    </motion.div>
+                  ))
+                ) : (
+                  // Fallback если нет медиа
+                  [...Array(8)].map((_, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      whileInView={{ opacity: 1, scale: 1 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: i * 0.05 }}
+                      className="aspect-square bg-gradient-to-br from-[#f9c200]/20 to-[#f9c200]/5 rounded-2xl flex items-center justify-center"
+                    >
+                      <Image className="text-[#f9c200]/50" size={40} />
+                    </motion.div>
+                  ))
+                )}
               </div>
 
               {!isAuthenticated && (
-                <div className="absolute inset-0 bg-black/80 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-                  <div className="text-center p-8">
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <motion.div
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className="text-center p-8 bg-black/90 backdrop-blur-sm rounded-2xl border border-[#f9c200]/30"
+                  >
+                    <Lock className="text-[#f9c200] mx-auto mb-4" size={48} />
                     <h3 className="text-2xl font-bold text-white mb-4 uppercase">
                       МЕДИА ДОСТУПНЫ ТОЛЬКО УЧАСТНИКАМ
                     </h3>
@@ -340,7 +423,7 @@ const Home = () => {
                       <span>ПРИСОЕДИНИТЬСЯ</span>
                       <ArrowRight size={20} />
                     </Link>
-                  </div>
+                  </motion.div>
                 </div>
               )}
             </div>
@@ -359,7 +442,7 @@ const Home = () => {
         </div>
       </section>
 
-      {/* CTA Section */}
+      {/* CTA Section - остается без изменений */}
       {!isAuthenticated && (
         <section className="relative py-20 px-4">
           <div className="container mx-auto max-w-4xl">
@@ -369,11 +452,9 @@ const Home = () => {
               viewport={{ once: true }}
               className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#f9c200]/20 to-[#f9c200]/5 p-12 text-center border border-[#f9c200]/30"
             >
-              {/* Glow effect */}
               <div className="absolute inset-0 bg-[#f9c200]/10 blur-3xl" />
               
               <div className="relative z-10">
-                
                 <h2 className="text-4xl md:text-5xl font-black text-white mb-4 uppercase">
                   ВРЫВАЙСЯ К НАМ!
                 </h2>

@@ -13,10 +13,44 @@ const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
+// Public endpoint для главной страницы
+router.get('/public', async (req, res) => {
+  try {
+    const query = `
+      SELECT m.id, m.type, m.url, m.thumbnail_url, m.event_id, e.title as event_title
+      FROM media m
+      LEFT JOIN events e ON m.event_id = e.id
+      ORDER BY m.uploaded_at DESC
+      LIMIT 8
+    `;
+    
+    const [media] = await pool.execute(query);
+    
+    const formattedMedia = media.map(item => ({
+      id: item.id,
+      type: item.type,
+      url: item.url,
+      file_url: item.url,
+      thumbnail_url: item.thumbnail_url,
+      event_id: item.event_id,
+      event_title: item.event_title
+    }));
+    
+    res.json(formattedMedia);
+  } catch (error) {
+    console.error('Get public media error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Get media - ИСПРАВЛЕННАЯ ВЕРСИЯ
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const { event_id, type, limit = '100', offset = '0' } = req.query;
+    
+    // Убедимся что limit и offset - числа
+    const limitNum = Math.min(parseInt(limit) || 100, 1000); // максимум 1000
+    const offsetNum = Math.max(parseInt(offset) || 0, 0); // минимум 0
     
     let query = `
       SELECT m.*, u.username, u.first_name, u.last_name, e.title as event_title
@@ -39,18 +73,29 @@ router.get('/', authMiddleware, async (req, res) => {
       params.push(type);
     }
     
-    query += ' ORDER BY m.uploaded_at DESC LIMIT ? OFFSET ?';
-    
-    // Убедимся что limit и offset - числа
-    const limitNum = parseInt(limit) || 100;
-    const offsetNum = parseInt(offset) || 0;
-    params.push(limitNum, offsetNum);
+    // ВАЖНО: Встраиваем LIMIT и OFFSET напрямую в запрос, а не через параметры
+    query += ` ORDER BY m.uploaded_at DESC LIMIT ${limitNum} OFFSET ${offsetNum}`;
     
     console.log('Media query:', query);
     console.log('Media params:', params);
     
     const [media] = await pool.execute(query, params);
-    res.json(media);
+    
+    // Обрабатываем данные медиа
+    const formattedMedia = media.map(item => ({
+      id: item.id,
+      event_id: item.event_id,
+      type: item.type,
+      url: item.url,
+      file_url: item.url, // для совместимости с фронтендом
+      thumbnail_url: item.thumbnail_url,
+      uploaded_by: item.uploaded_by,
+      uploaded_at: item.uploaded_at,
+      uploader_name: item.first_name || item.username || 'Анонимный',
+      event_title: item.event_title || null
+    }));
+    
+    res.json(formattedMedia);
   } catch (error) {
     console.error('Get media error:', error);
     res.status(500).json({ error: 'Server error' });
