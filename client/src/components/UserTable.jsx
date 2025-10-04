@@ -199,7 +199,6 @@ const UserTable = ({ users, title = "Топ-20 чуваков", icon }) => {
       >
         <p className="text-sm text-gray-400">
           Набирай репутацию в чате{' '}
-          <span className="text-[#f9c200] font-semibold">+реп</span>
         </p>
       </motion.div>
     </motion.div>

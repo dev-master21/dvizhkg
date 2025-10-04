@@ -13,10 +13,10 @@ const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
-// Get media
+// Get media - ИСПРАВЛЕННАЯ ВЕРСИЯ
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    const { event_id, type, limit = 100, offset = 0 } = req.query;
+    const { event_id, type, limit = '100', offset = '0' } = req.query;
     
     let query = `
       SELECT m.*, u.username, u.first_name, u.last_name, e.title as event_title
@@ -28,9 +28,10 @@ router.get('/', authMiddleware, async (req, res) => {
     
     const params = [];
     
-    if (event_id && event_id !== 'null') {
+    // Проверяем event_id более тщательно
+    if (event_id && event_id !== 'null' && event_id !== 'undefined') {
       query += ' AND m.event_id = ?';
-      params.push(event_id);
+      params.push(parseInt(event_id) || null);
     }
     
     if (type && type !== 'all') {
@@ -39,7 +40,14 @@ router.get('/', authMiddleware, async (req, res) => {
     }
     
     query += ' ORDER BY m.uploaded_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), parseInt(offset));
+    
+    // Убедимся что limit и offset - числа
+    const limitNum = parseInt(limit) || 100;
+    const offsetNum = parseInt(offset) || 0;
+    params.push(limitNum, offsetNum);
+    
+    console.log('Media query:', query);
+    console.log('Media params:', params);
     
     const [media] = await pool.execute(query, params);
     res.json(media);
@@ -83,9 +91,14 @@ router.post('/upload', authMiddleware, adminMiddleware, uploadRateLimiter, uploa
           }
         }
         
+        // Обработка event_id
+        const eventIdValue = event_id && event_id !== 'null' && event_id !== 'undefined' 
+          ? parseInt(event_id) 
+          : null;
+        
         const [result] = await connection.execute(
           'INSERT INTO media (event_id, type, url, thumbnail_url, uploaded_by) VALUES (?, ?, ?, ?, ?)',
-          [event_id || null, isVideo ? 'video' : 'photo', url, thumbnailUrl, req.user.id]
+          [eventIdValue, isVideo ? 'video' : 'photo', url, thumbnailUrl, req.user.id]
         );
         
         uploadedMedia.push({
@@ -101,7 +114,7 @@ router.post('/upload', authMiddleware, adminMiddleware, uploadRateLimiter, uploa
       
       // Send notification to Telegram
       const chatId = process.env.TELEGRAM_CHAT_ID;
-      const siteUrl = process.env.SITE_URL;
+      const siteUrl = process.env.SITE_URL || 'https://dvizh.kg';
       const uploaderName = req.user.first_name || req.user.username || 'Администратор';
       
       let message = `📸 Администратор *${uploaderName}* загрузил новые `;

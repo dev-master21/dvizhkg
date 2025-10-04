@@ -9,11 +9,13 @@ import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 
 // Lazy loading страниц
+const Home = lazy(() => import('./pages/Home'));
 const Login = lazy(() => import('./pages/Login'));
 const Events = lazy(() => import('./pages/Events'));
 const Media = lazy(() => import('./pages/Media'));
 const Profile = lazy(() => import('./pages/Profile'));
 const EventDetails = lazy(() => import('./pages/EventDetails'));
+const AuthCallback = lazy(() => import('./pages/AuthCallback'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,9 +54,12 @@ function App() {
               {/* Страница логина */}
               <Route path="/login" element={<Login />} />
               
-              {/* Публичные страницы (не требуют авторизации) */}
+              {/* Страница обработки авторизации из бота */}
+              <Route path="/auth-callback" element={<AuthCallback />} />
+              
+              {/* Публичные страницы с Layout */}
               <Route element={<Layout />}>
-                <Route path="/" element={<Navigate to="/events" replace />} />
+                <Route path="/" element={<Home />} />
                 <Route path="/events" element={<Events />} />
                 <Route path="/events/:id" element={<EventDetails />} />
                 

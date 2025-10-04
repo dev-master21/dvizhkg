@@ -23,13 +23,35 @@ dotenv.config();
 const app = express();
 const server = createServer(app);
 
-// Middleware
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? 'https://dvizh.kg' 
-    : 'http://localhost:3000',
-  credentials: true
-}));
+// Trust proxy
+app.set('trust proxy', true);
+
+// CORS configuration - ИСПРАВЛЕННЫЙ
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Разрешаем запросы с этих доменов
+    const allowedOrigins = [
+      'https://dvizh.kg',
+      'https://www.dvizh.kg',
+      'http://localhost:3000',
+      'http://localhost:5173'
+    ];
+    
+    // Разрешаем запросы без origin (например, от Postman или curl)
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+app.use(cors(corsOptions));
+
+// Остальные middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -63,10 +85,11 @@ app.get('/api/health', (req, res) => {
 app.use(errorHandler);
 
 // Start server
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 1312;
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`📍 CORS enabled for: https://dvizh.kg, https://www.dvizh.kg`);
 });
 
 // Graceful shutdown

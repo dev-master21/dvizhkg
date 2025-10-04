@@ -5,6 +5,42 @@ import { kickChatMember } from '../services/telegram.js';
 
 const router = express.Router();
 
+// Public endpoint for top users (БЕЗ авторизации)
+router.get('/top/public', async (req, res) => {
+  try {
+    const [users] = await pool.execute(
+      `SELECT id, first_name, last_name, username, avatar_url, reputation
+       FROM users
+       WHERE reputation > 0 AND is_blocked = FALSE
+       ORDER BY reputation DESC
+       LIMIT 20`
+    );
+    
+    res.json(users);
+  } catch (error) {
+    console.error('Get public top users error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get top users (требует авторизацию)
+router.get('/top', authMiddleware, async (req, res) => {
+  try {
+    const [users] = await pool.execute(
+      `SELECT id, telegram_id, username, first_name, last_name, avatar_url, reputation, message_count
+       FROM users
+       WHERE reputation > 0 AND is_blocked = FALSE
+       ORDER BY reputation DESC
+       LIMIT 20`
+    );
+    
+    res.json(users);
+  } catch (error) {
+    console.error('Get top users error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Get user profile
 router.get('/:id', authMiddleware, async (req, res) => {
   try {
@@ -22,6 +58,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
     // Don't send sensitive data
     const user = { ...users[0] };
     delete user.is_blocked;
+    delete user.phone_number; // Скрываем номер телефона
     
     // Only admins can see blocked status
     if (req.user.role === 'admin') {
@@ -35,14 +72,14 @@ router.get('/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// Get user stats
+// Get user stats - ИСПРАВЛЕННАЯ ВЕРСИЯ
 router.get('/:id/stats', authMiddleware, async (req, res) => {
   try {
     const userId = req.params.id;
     
-    // Get user's rank
+    // Get user's rank - используем backticks для rank
     const [rankResult] = await pool.execute(
-      `SELECT COUNT(*) + 1 as rank 
+      `SELECT COUNT(*) + 1 as \`rank\`
        FROM users 
        WHERE reputation > (SELECT reputation FROM users WHERE id = ?)`,
       [userId]
@@ -117,24 +154,6 @@ router.get('/', authMiddleware, async (req, res) => {
     res.json(users);
   } catch (error) {
     console.error('Get users error:', error);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// Get top users
-router.get('/top', authMiddleware, async (req, res) => {
-  try {
-    const [users] = await pool.execute(
-      `SELECT id, telegram_id, username, first_name, last_name, avatar_url, reputation, message_count
-       FROM users
-       WHERE reputation > 0 AND is_blocked = FALSE
-       ORDER BY reputation DESC
-       LIMIT 20`
-    );
-    
-    res.json(users);
-  } catch (error) {
-    console.error('Get top users error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });

@@ -1,12 +1,33 @@
 import express from 'express';
 import { pool } from '../services/database.js';
-import { authMiddleware, adminMiddleware } from '../middleware/auth.js';
+import { authMiddleware, adminMiddleware, optionalAuthMiddleware } from '../middleware/auth.js';
 import { upload, optimizeImage } from '../middleware/upload.js';
 import { sendPhotoToChat, sendMessageToChat } from '../services/telegram.js';
 
 const router = express.Router();
 
-// Get all events
+// Public endpoint for homepage (БЕЗ авторизации)
+router.get('/public', async (req, res) => {
+  try {
+    const [events] = await pool.execute(
+      `SELECT e.*, 
+        COUNT(DISTINCT er.user_id) as participant_count
+       FROM events e
+       LEFT JOIN event_registrations er ON e.id = er.event_id
+       WHERE e.status = 'upcoming'
+       GROUP BY e.id
+       ORDER BY e.event_date ASC
+       LIMIT 10`
+    );
+    
+    res.json(events);
+  } catch (error) {
+    console.error('Get public events error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get all events (требует авторизацию)
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const [events] = await pool.execute(
@@ -44,7 +65,41 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
-// Get single event
+// Get single event public (БЕЗ авторизации)
+router.get('/public/:id', async (req, res) => {
+  try {
+    const [events] = await pool.execute(
+      `SELECT e.*, 
+        COUNT(DISTINCT er.user_id) as participant_count,
+        GROUP_CONCAT(DISTINCT CONCAT(ec.type, ':', ec.value) SEPARATOR ',') as contacts
+       FROM events e
+       LEFT JOIN event_registrations er ON e.id = er.event_id
+       LEFT JOIN event_contacts ec ON e.id = ec.event_id
+       WHERE e.id = ?
+       GROUP BY e.id`,
+      [req.params.id]
+    );
+    
+    if (events.length === 0) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+    
+    const event = events[0];
+    
+    // Parse contacts
+    event.contacts = event.contacts ? event.contacts.split(',').map(c => {
+      const [type, value] = c.split(':');
+      return { type, value };
+    }) : [];
+    
+    res.json(event);
+  } catch (error) {
+    console.error('Get public event error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get single event (требует авторизацию)
 router.get('/:id', authMiddleware, async (req, res) => {
   try {
     const [events] = await pool.execute(

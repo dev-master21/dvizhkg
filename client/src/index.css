@@ -2,7 +2,9 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
+* {
+  text-transform: uppercase !important;
+}
 * {
   font-family: 'Montserrat', sans-serif;
   margin: 0;
