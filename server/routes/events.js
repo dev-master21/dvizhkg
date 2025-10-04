@@ -27,6 +27,31 @@ router.get('/public', async (req, res) => {
   }
 });
 
+router.get('/public/all', async (req, res) => {
+  try {
+    const [events] = await pool.execute(
+      `SELECT e.*, 
+        COUNT(DISTINCT er.user_id) as participant_count
+       FROM events e
+       LEFT JOIN event_registrations er ON e.id = er.event_id
+       GROUP BY e.id
+       ORDER BY 
+         CASE e.status 
+           WHEN 'upcoming' THEN 1
+           WHEN 'completed' THEN 2
+           WHEN 'cancelled' THEN 3
+         END,
+         e.event_date DESC
+       LIMIT 20`
+    );
+    
+    res.json(events);
+  } catch (error) {
+    console.error('Get all public events error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Get all events (требует авторизацию)
 router.get('/', authMiddleware, async (req, res) => {
   try {

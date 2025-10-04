@@ -16,6 +16,7 @@ const Media = lazy(() => import('./pages/Media'));
 const Profile = lazy(() => import('./pages/Profile'));
 const EventDetails = lazy(() => import('./pages/EventDetails'));
 const AuthCallback = lazy(() => import('./pages/AuthCallback'));
+const Merch = lazy(() => import('./pages/Merch'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -62,6 +63,7 @@ function App() {
                 <Route path="/" element={<Home />} />
                 <Route path="/events" element={<Events />} />
                 <Route path="/events/:id" element={<EventDetails />} />
+                <Route path="/merch" element={<Merch />} />
                 
                 {/* Страницы требующие авторизации */}
                 <Route element={<ProtectedRoute requireAuth />}>

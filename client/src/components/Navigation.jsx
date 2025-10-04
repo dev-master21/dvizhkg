@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   Calendar, Image, User, Menu, LogOut, Trophy, 
   LogIn, ChevronRight, Sparkles, X, Home,
-  Shield, MessageCircle, Users
+  Shield, MessageCircle, Users, ShoppingBag
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -27,6 +27,7 @@ const Navigation = ({ onMenuToggle }) => {
     { path: '/events', label: 'События', icon: Calendar, public: true },
     { path: '/media', label: 'Медиа', icon: Image, public: true },
     { path: '/profile', label: 'Профиль', icon: User, public: false },
+    { path: '/merch', label: 'Мерч', icon: ShoppingBag, public: true },
   ];
 
   const isActive = (path) => location.pathname.startsWith(path);

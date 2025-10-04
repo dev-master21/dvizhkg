@@ -5,7 +5,7 @@ import {
   ChevronDown, Calendar, Trophy, Image, Star,
   Sparkles, Zap, Users, ArrowRight, Play,
   MessageCircle, MapPin, Clock, ChevronLeft, ChevronRight as ChevronRightIcon,
-  Lock, Video
+  Lock, Video, Package
 } from 'lucide-react';
 import { useQuery } from 'react-query';
 import { Swiper, SwiperSlide } from 'swiper/react';
@@ -29,10 +29,10 @@ const Home = () => {
   const heroOpacity = useTransform(scrollYProgress, [0, 0.3], [1, 0]);
   const heroScale = useTransform(scrollYProgress, [0, 0.3], [1, 0.8]);
   
-  // Load ALL events (upcoming + completed)
+  // Load ALL events - изменен эндпоинт для получения всех событий
   const { data: events = [] } = useQuery(
     ['homeEvents'],
-    () => axios.get('/api/events/public').then(res => res.data)
+    () => axios.get('/api/events/public/all').then(res => res.data)
   );
   
   // Load top users
@@ -197,7 +197,7 @@ const Home = () => {
         </div>
       </motion.section>
 
-      {/* Events Carousel Section */}
+      {/* Events Carousel Section - ИЗМЕНЕНО: отображение всех событий */}
       <section className="relative py-20 px-4 bg-gradient-to-b from-black to-[#0a0a0a]">
         <div className="container mx-auto">
           <motion.div
@@ -210,7 +210,7 @@ const Home = () => {
               НАШИ ДВИЖУХИ
             </h2>
             <p className="text-xl text-gray-400 uppercase">
-              ПРОШЕДШИЕ И БУДУЩИЕ СОБЫТИЯ
+              ВСЕ СОБЫТИЯ DVIZH BISHKEK
             </p>
           </motion.div>
 
@@ -302,34 +302,7 @@ const Home = () => {
         </div>
       </section>
 
-      {/* Top Users Section - остается без изменений */}
-      <section className="relative py-20 px-4">
-        <div className="container mx-auto max-w-4xl">
-          <motion.div
-            initial={{ opacity: 0, y: 50 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-center mb-12"
-          >
-            <h2 className="text-5xl md:text-6xl font-black text-white mb-4 uppercase">
-              ТОП ДВИЖ ПАЦАНОВ
-            </h2>
-            <p className="text-xl text-gray-400 uppercase">
-              САМЫЕ АКТИВНЫЕ УЧАСТНИКИ ДВИЖА
-            </p>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true }}
-          >
-            <UserTable users={topUsers} title="ЛИДЕРЫ ДВИЖУХИ" />
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Media Section с реальными файлами */}
+      {/* Media Section - ТЕПЕРЬ ИДЕТ ПЕРЕД TOP USERS */}
       <section className="relative py-20 px-4 bg-gradient-to-b from-[#0a0a0a] to-black">
         <div className="container mx-auto">
           <motion.div
@@ -442,7 +415,125 @@ const Home = () => {
         </div>
       </section>
 
-      {/* CTA Section - остается без изменений */}
+      {/* Merch Section - НОВЫЙ БЛОК */}
+      <section className="relative py-20 px-4">
+        <div className="container mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-12"
+          >
+            <h2 className="text-5xl md:text-6xl font-black text-white mb-4 uppercase">
+              НАШ МЕРЧ
+            </h2>
+            <p className="text-xl text-gray-400 uppercase">
+              ЭКСКЛЮЗИВНАЯ ОДЕЖДА И АКСЕССУАРЫ
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            {/* DVIZH BISHKEK Card */}
+            <motion.div
+              initial={{ opacity: 0, x: -30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#2a2a2a] to-[#1d1d1d] border border-[#3a3a3a] hover:border-[#f9c200]/30 transition-all"
+            >
+              <div className="p-8">
+                <div className="mb-6">
+                  <Sparkles className="text-[#f9c200] mb-4" size={48} />
+                  <h3 className="text-2xl font-black text-white mb-2 uppercase">
+                    DVIZH BISHKEK
+                  </h3>
+                  <p className="text-gray-400">
+                    Футболки, худи и панамки с символикой движухи
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2 mb-6">
+                  <span className="px-3 py-1 bg-[#f9c200]/20 text-[#f9c200] rounded-lg text-xs font-bold uppercase">
+                    2 РЕВИЗИИ
+                  </span>
+                  <span className="px-3 py-1 bg-black/30 text-gray-300 rounded-lg text-xs font-bold uppercase">
+                    ФУТБОЛКИ
+                  </span>
+                  <span className="px-3 py-1 bg-black/30 text-gray-300 rounded-lg text-xs font-bold uppercase">
+                    ХУДИ
+                  </span>
+                  <span className="px-3 py-1 bg-black/30 text-gray-300 rounded-lg text-xs font-bold uppercase">
+                    ПАНАМКИ
+                  </span>
+                </div>
+                <Link
+                  to="/merch?category=dvizh_bishkek"
+                  className="inline-flex items-center gap-2 text-[#f9c200] hover:text-[#ffdd44] transition font-bold uppercase"
+                >
+                  <span>СМОТРЕТЬ КОЛЛЕКЦИЮ</span>
+                  <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                </Link>
+              </div>
+              <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-[#f9c200]/10 rounded-full blur-3xl" />
+            </motion.div>
+
+            {/* MAX KORZH Card */}
+            <motion.div
+              initial={{ opacity: 0, x: 30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-900/20 to-pink-900/20 border border-purple-500/30 hover:border-purple-500/50 transition-all"
+            >
+              <div className="p-8">
+                <div className="mb-6">
+                  <Star className="text-purple-400 mb-4" size={48} />
+                  <h3 className="text-2xl font-black text-white mb-2 uppercase">
+                    OFFICIAL MAX KORZH
+                  </h3>
+                  <p className="text-gray-400">
+                    Официальный мерч: худи и шарфы
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2 mb-6">
+                  <span className="px-3 py-1 bg-purple-500/20 text-purple-400 rounded-lg text-xs font-bold uppercase">
+                    ЭКСКЛЮЗИВ
+                  </span>
+                  <span className="px-3 py-1 bg-black/30 text-gray-300 rounded-lg text-xs font-bold uppercase">
+                    ХУДИ
+                  </span>
+                  <span className="px-3 py-1 bg-black/30 text-gray-300 rounded-lg text-xs font-bold uppercase">
+                    ШАРФЫ
+                  </span>
+                </div>
+                <Link
+                  to="/merch?category=official_max_korzh"
+                  className="inline-flex items-center gap-2 text-purple-400 hover:text-purple-300 transition font-bold uppercase"
+                >
+                  <span>СМОТРЕТЬ КОЛЛЕКЦИЮ</span>
+                  <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                </Link>
+              </div>
+              <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-purple-500/10 rounded-full blur-3xl" />
+            </motion.div>
+          </div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mt-12"
+          >
+            <Link
+              to="/merch"
+              className="inline-flex items-center gap-3 px-8 py-4 bg-[#f9c200] text-black font-bold rounded-2xl hover:bg-[#ffdd44] transition-all transform hover:scale-105 uppercase"
+            >
+              <Package  size={24} />
+              <span>ВЕСЬ МЕРЧ</span>
+              <ArrowRight size={20} />
+            </Link>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
       {!isAuthenticated && (
         <section className="relative py-20 px-4">
           <div className="container mx-auto max-w-4xl">
@@ -475,6 +566,33 @@ const Home = () => {
           </div>
         </section>
       )}
+
+      {/* Top Users Section - ПЕРЕМЕЩЕНО В САМЫЙ НИЗ */}
+      <section className="relative py-20 px-4 bg-gradient-to-t from-[#0a0a0a] to-black">
+        <div className="container mx-auto max-w-4xl">
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-12"
+          >
+            <h2 className="text-5xl md:text-6xl font-black text-white mb-4 uppercase">
+              ТОП ЧЕЛОВ
+            </h2>
+            <p className="text-xl text-gray-400 uppercase">
+              САМЫЕ АКТИВНЫЕ УЧАСТНИКИ ДВИЖА
+            </p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true }}
+          >
+            <UserTable users={topUsers} title="ЛИДЕРЫ ДВИЖУХИ" />
+          </motion.div>
+        </div>
+      </section>
     </div>
   );
 };

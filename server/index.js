@@ -13,6 +13,7 @@ import authRoutes from './routes/auth.js';
 import eventsRoutes from './routes/events.js';
 import mediaRoutes from './routes/media.js';
 import usersRoutes from './routes/users.js';
+import merchRoutes from './routes/merch.js';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js';
@@ -66,6 +67,7 @@ try {
   await mkdir(path.join(__dirname, 'uploads', 'events'), { recursive: true });
   await mkdir(path.join(__dirname, 'uploads', 'media'), { recursive: true });
   await mkdir(path.join(__dirname, 'uploads', 'thumbs'), { recursive: true });
+  await mkdir(path.join(__dirname, 'uploads', 'merch'), { recursive: true });
 } catch (err) {
   console.error('Error creating directories:', err);
 }
@@ -78,6 +80,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/events', eventsRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/merch', merchRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
