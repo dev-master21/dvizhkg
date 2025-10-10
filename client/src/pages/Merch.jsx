@@ -252,11 +252,11 @@ const MerchCard = ({ item, onEdit, onDelete, isAdmin }) => {
                 </h3>
                 
                 <p className="text-gray-300">
-                  Для заказа мерча обратитесь к организаторам
+                  Для заказа мерча обратитесь к менеджеру DVIZH BISHKEK
                 </p>
                 
                 <div className="p-4 bg-black/30 rounded-xl">
-                  <p className="text-gray-400 text-sm mb-2 uppercase">TELEGRAM ЧАТ:</p>
+                  <p className="text-gray-400 text-sm mb-2 uppercase">TELEGRAM МЕНЕДЖЕРА:</p>
                   
                    <a href="https://t.me/dvizh_bishkek_chat"
                     target="_blank"
@@ -264,7 +264,7 @@ const MerchCard = ({ item, onEdit, onDelete, isAdmin }) => {
                     className="flex items-center justify-center gap-2 text-[#f9c200] hover:text-[#ffdd44] transition"
                   >
                     <MessageCircle size={20} />
-                    <span className="font-bold">@dvizh_bishkek_chat</span>
+                    <span className="font-bold">@dvizh_bishkek_manager</span>
                   </a>
                 </div>
                 

@@ -7,11 +7,34 @@ import { authMiddleware, adminMiddleware } from '../middleware/auth.js';
 import { upload, optimizeImage } from '../middleware/upload.js';
 import { uploadRateLimiter } from '../middleware/rateLimiter.js';
 import { sendMessageToChat } from '../services/telegram.js';
+import ffmpeg from 'fluent-ffmpeg';
+import sharp from 'sharp';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const router = express.Router();
+
+// Функция для генерации thumbnail из видео с сохранением пропорций
+const generateVideoThumbnail = (videoPath, outputPath) => {
+  return new Promise((resolve, reject) => {
+    ffmpeg(videoPath)
+      .screenshots({
+        timestamps: ['00:00:02'], // Берем кадр на 2-й секунде
+        filename: path.basename(outputPath),
+        folder: path.dirname(outputPath),
+        size: '?x600'  // Высота 600px, ширина автоматически с сохранением пропорций
+      })
+      .on('end', () => {
+        console.log('Thumbnail generated successfully');
+        resolve(outputPath);
+      })
+      .on('error', (err) => {
+        console.error('Error generating thumbnail:', err);
+        reject(err);
+      });
+  });
+};
 
 // Public endpoint для главной страницы
 router.get('/public', async (req, res) => {
@@ -43,14 +66,13 @@ router.get('/public', async (req, res) => {
   }
 });
 
-// Get media - ИСПРАВЛЕННАЯ ВЕРСИЯ
+// Get media
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const { event_id, type, limit = '100', offset = '0' } = req.query;
     
-    // Убедимся что limit и offset - числа
-    const limitNum = Math.min(parseInt(limit) || 100, 1000); // максимум 1000
-    const offsetNum = Math.max(parseInt(offset) || 0, 0); // минимум 0
+    const limitNum = Math.min(parseInt(limit) || 100, 1000);
+    const offsetNum = Math.max(parseInt(offset) || 0, 0);
     
     let query = `
       SELECT m.*, u.username, u.first_name, u.last_name, e.title as event_title
@@ -62,7 +84,6 @@ router.get('/', authMiddleware, async (req, res) => {
     
     const params = [];
     
-    // Проверяем event_id более тщательно
     if (event_id && event_id !== 'null' && event_id !== 'undefined') {
       query += ' AND m.event_id = ?';
       params.push(parseInt(event_id) || null);
@@ -73,7 +94,6 @@ router.get('/', authMiddleware, async (req, res) => {
       params.push(type);
     }
     
-    // ВАЖНО: Встраиваем LIMIT и OFFSET напрямую в запрос, а не через параметры
     query += ` ORDER BY m.uploaded_at DESC LIMIT ${limitNum} OFFSET ${offsetNum}`;
     
     console.log('Media query:', query);
@@ -81,13 +101,12 @@ router.get('/', authMiddleware, async (req, res) => {
     
     const [media] = await pool.execute(query, params);
     
-    // Обрабатываем данные медиа
     const formattedMedia = media.map(item => ({
       id: item.id,
       event_id: item.event_id,
       type: item.type,
       url: item.url,
-      file_url: item.url, // для совместимости с фронтендом
+      file_url: item.url,
       thumbnail_url: item.thumbnail_url,
       uploaded_by: item.uploaded_by,
       uploaded_at: item.uploaded_at,
@@ -102,7 +121,7 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
-// Upload media (admin only)
+// Upload media with video thumbnail generation
 router.post('/upload', authMiddleware, adminMiddleware, uploadRateLimiter, upload.array('files', 20), optimizeImage, async (req, res) => {
   try {
     const { event_id } = req.body;
@@ -124,9 +143,44 @@ router.post('/upload', authMiddleware, adminMiddleware, uploadRateLimiter, uploa
         
         if (isVideo) {
           url = `/uploads/media/${file.filename}`;
-          thumbnailUrl = null;
+          
+          // Генерируем thumbnail для видео
+          try {
+            const thumbnailFilename = `video-thumb-${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
+            const thumbnailPath = path.join(__dirname, '..', 'uploads', 'thumbs', thumbnailFilename);
+            
+            // Создаем директорию если её нет
+            const thumbnailDir = path.dirname(thumbnailPath);
+            await fs.mkdir(thumbnailDir, { recursive: true });
+            
+            // Генерируем thumbnail из видео
+            const videoPath = path.join(__dirname, '..', 'uploads', 'media', file.filename);
+            await generateVideoThumbnail(videoPath, thumbnailPath);
+            
+            // Оптимизируем thumbnail с сохранением пропорций
+            const optimizedThumbnailFilename = `opt-${thumbnailFilename}`;
+            const optimizedThumbnailPath = path.join(__dirname, '..', 'uploads', 'thumbs', optimizedThumbnailFilename);
+            
+            await sharp(thumbnailPath)
+              .resize(800, 600, { 
+                fit: 'inside',  // Изменено с 'cover' на 'inside' для сохранения пропорций
+                withoutEnlargement: true  // Не увеличивать если изображение меньше
+              })
+              .jpeg({ quality: 85 })
+              .toFile(optimizedThumbnailPath);
+            
+            // Удаляем неоптимизированный thumbnail
+            await fs.unlink(thumbnailPath);
+            
+            thumbnailUrl = `/uploads/thumbs/${optimizedThumbnailFilename}`;
+            
+            console.log('Video thumbnail generated:', thumbnailUrl);
+          } catch (err) {
+            console.error('Error generating video thumbnail:', err);
+            thumbnailUrl = null; // Если не удалось создать thumbnail
+          }
         } else {
-          // Use optimized image if available
+          // Для изображений используем существующую логику
           if (file.optimizedPath) {
             url = `/uploads/media/optimized-${file.filename}`;
             thumbnailUrl = `/uploads/thumbs/thumb-${file.filename}`;
@@ -136,7 +190,6 @@ router.post('/upload', authMiddleware, adminMiddleware, uploadRateLimiter, uploa
           }
         }
         
-        // Обработка event_id
         const eventIdValue = event_id && event_id !== 'null' && event_id !== 'undefined' 
           ? parseInt(event_id) 
           : null;
@@ -204,7 +257,6 @@ router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const mediaId = req.params.id;
     
-    // Get media info
     const [media] = await pool.execute(
       'SELECT * FROM media WHERE id = ?',
       [mediaId]
@@ -216,7 +268,6 @@ router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
     
     const mediaItem = media[0];
     
-    // Delete from database
     await pool.execute('DELETE FROM media WHERE id = ?', [mediaId]);
     
     // Delete files from disk
@@ -232,6 +283,7 @@ router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
       }
     } catch (err) {
       console.error('Error deleting files:', err);
+      // Не останавливаем процесс если файл не найден
     }
     
     res.json({ success: true });

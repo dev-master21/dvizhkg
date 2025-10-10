@@ -1,22 +1,37 @@
 import multer from 'multer';
 import sharp from 'sharp';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Функция для создания директории если она не существует
+const ensureDirectoryExists = (dirPath) => {
+  if (!fs.existsSync(dirPath)) {
+    fs.mkdirSync(dirPath, { recursive: true });
+  }
+};
+
 // Storage configuration
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     let folder = 'uploads/';
     
+    // Определяем папку в зависимости от типа файла
     if (file.fieldname === 'preview') {
       folder = 'uploads/events/';
     } else if (file.fieldname === 'files') {
       folder = 'uploads/media/';
+    } else if (file.fieldname === 'images' || file.fieldname === 'image') {
+      // ДЛЯ МЕРЧА - добавлено условие
+      folder = 'uploads/merch/';
     }
+    
+    // Создаем папку если не существует
+    ensureDirectoryExists(folder);
     
     cb(null, folder);
   },
@@ -75,10 +90,18 @@ export const optimizeImage = async (req, res, next) => {
         'optimized-' + path.basename(file.path)
       );
       
-      const thumbnailPath = path.join(
+      // Создаем путь для миниатюр
+      const thumbsDir = path.join(
         path.dirname(file.path),
         '..',
-        'thumbs',
+        'thumbs'
+      );
+      
+      // Создаем директорию thumbs если не существует
+      ensureDirectoryExists(thumbsDir);
+      
+      const thumbnailPath = path.join(
+        thumbsDir,
         'thumb-' + path.basename(file.path)
       );
       
@@ -108,6 +131,7 @@ export const optimizeImage = async (req, res, next) => {
     next();
   } catch (error) {
     console.error('Image optimization error:', error);
-    next(error);
+    // Продолжаем без оптимизации если что-то пошло не так
+    next();
   }
 };

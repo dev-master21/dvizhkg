@@ -14,6 +14,7 @@ import eventsRoutes from './routes/events.js';
 import mediaRoutes from './routes/media.js';
 import usersRoutes from './routes/users.js';
 import merchRoutes from './routes/merch.js';
+import communitiesRoutes from './routes/communities.js';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js';
@@ -81,6 +82,7 @@ app.use('/api/events', eventsRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/merch', merchRoutes);
+app.use('/api/communities', communitiesRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

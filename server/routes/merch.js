@@ -6,6 +6,37 @@ import { uploadRateLimiter } from '../middleware/rateLimiter.js';
 
 const router = express.Router();
 
+// Вспомогательная функция для безопасного парсинга размеров
+// Вспомогательная функция для безопасного парсинга размеров
+const parseSizes = (sizesString) => {
+  if (!sizesString) return ['S', 'M', 'L', 'XL', 'XXL'];
+  
+  // Если это уже массив, возвращаем его как есть
+  if (Array.isArray(sizesString)) {
+    return sizesString;
+  }
+  
+  try {
+    // Проверяем тип данных
+    if (typeof sizesString === 'string') {
+      if (sizesString.startsWith('[')) {
+        // Это JSON массив
+        return JSON.parse(sizesString);
+      } else {
+        // Это строка через запятую
+        return sizesString.split(',').map(s => s.trim());
+      }
+    } else {
+      // Если это не строка и не массив, возвращаем дефолтные значения
+      console.error('Unexpected sizes type:', typeof sizesString, sizesString);
+      return ['S', 'M', 'L', 'XL', 'XXL'];
+    }
+  } catch (e) {
+    console.error('Error parsing sizes:', e, sizesString);
+    return ['S', 'M', 'L', 'XL', 'XXL'];
+  }
+};
+
 // Get all merch (public)
 router.get('/', async (req, res) => {
   try {
@@ -29,17 +60,17 @@ router.get('/', async (req, res) => {
     
     const params = [];
     
-    if (category) {
+    if (category && category !== 'all') {
       query += ' AND m.category = ?';
       params.push(category);
     }
     
-    if (type) {
+    if (type && type !== 'all') {
       query += ' AND m.type = ?';
       params.push(type);
     }
     
-    if (revision) {
+    if (revision && revision !== 'all') {
       query += ' AND m.revision = ?';
       params.push(revision);
     }
@@ -48,14 +79,20 @@ router.get('/', async (req, res) => {
     
     const [items] = await pool.execute(query, params);
     
-    // Parse images JSON
+    // Parse images JSON и форматируем пути правильно
     const formattedItems = items.map(item => ({
       ...item,
       images: item.images ? 
-        JSON.parse(`[${item.images}]`).sort((a, b) => b.is_primary - a.is_primary || a.order - b.order) : 
+        JSON.parse(`[${item.images}]`)
+          .sort((a, b) => b.is_primary - a.is_primary || a.order - b.order)
+          .map(img => ({
+            ...img,
+            url: img.url.startsWith('/') ? img.url : '/' + img.url,
+            thumbnail: img.thumbnail ? (img.thumbnail.startsWith('/') ? img.thumbnail : '/' + img.thumbnail) : null
+          })) : 
         [],
-      sizes: item.sizes ? JSON.parse(item.sizes) : [],
-      available_sizes: item.available_sizes ? JSON.parse(item.available_sizes) : []
+      sizes: parseSizes(item.sizes),
+      available_sizes: parseSizes(item.available_sizes)
     }));
     
     res.json(formattedItems);
@@ -92,10 +129,16 @@ router.get('/:id', async (req, res) => {
     
     const item = items[0];
     item.images = item.images ? 
-      JSON.parse(`[${item.images}]`).sort((a, b) => b.is_primary - a.is_primary || a.order - b.order) : 
+      JSON.parse(`[${item.images}]`)
+        .sort((a, b) => b.is_primary - a.is_primary || a.order - b.order)
+        .map(img => ({
+          ...img,
+          url: img.url.startsWith('/') ? img.url : '/' + img.url,
+          thumbnail: img.thumbnail ? (img.thumbnail.startsWith('/') ? img.thumbnail : '/' + img.thumbnail) : null
+        })) : 
       [];
-    item.sizes = item.sizes ? JSON.parse(item.sizes) : [];
-    item.available_sizes = item.available_sizes ? JSON.parse(item.available_sizes) : [];
+    item.sizes = parseSizes(item.sizes);
+    item.available_sizes = parseSizes(item.available_sizes);
     
     res.json(item);
   } catch (error) {
@@ -104,6 +147,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// Остальной код остается без изменений...
 // Create merch item (admin only)
 router.post('/', authMiddleware, adminMiddleware, uploadRateLimiter, upload.array('images', 10), optimizeImage, async (req, res) => {
   try {
@@ -146,8 +190,16 @@ router.post('/', authMiddleware, adminMiddleware, uploadRateLimiter, upload.arra
       if (req.files && req.files.length > 0) {
         for (let i = 0; i < req.files.length; i++) {
           const file = req.files[i];
-          const imageUrl = `/uploads/merch/optimized-${file.filename}`;
-          const thumbnailUrl = `/uploads/thumbs/thumb-${file.filename}`;
+          
+          let imageUrl, thumbnailUrl;
+          
+          if (file.optimizedPath && file.thumbnailPath) {
+            imageUrl = `/uploads/merch/optimized-${file.filename}`;
+            thumbnailUrl = `/uploads/thumbs/thumb-${file.filename}`;
+          } else {
+            imageUrl = `/uploads/merch/${file.filename}`;
+            thumbnailUrl = null;
+          }
           
           await connection.execute(
             'INSERT INTO merch_images (merch_id, image_url, thumbnail_url, is_primary, sort_order) VALUES (?, ?, ?, ?, ?)',
@@ -198,7 +250,6 @@ router.put('/:id', authMiddleware, adminMiddleware, upload.array('images', 10), 
       
       // Add new images if uploaded
       if (req.files && req.files.length > 0) {
-        // Get current max order
         const [maxOrder] = await connection.execute(
           'SELECT MAX(sort_order) as max_order FROM merch_images WHERE merch_id = ?',
           [merchId]
@@ -208,8 +259,16 @@ router.put('/:id', authMiddleware, adminMiddleware, upload.array('images', 10), 
         
         for (let i = 0; i < req.files.length; i++) {
           const file = req.files[i];
-          const imageUrl = `/uploads/merch/optimized-${file.filename}`;
-          const thumbnailUrl = `/uploads/thumbs/thumb-${file.filename}`;
+          
+          let imageUrl, thumbnailUrl;
+          
+          if (file.optimizedPath && file.thumbnailPath) {
+            imageUrl = `/uploads/merch/optimized-${file.filename}`;
+            thumbnailUrl = `/uploads/thumbs/thumb-${file.filename}`;
+          } else {
+            imageUrl = `/uploads/merch/${file.filename}`;
+            thumbnailUrl = null;
+          }
           
           await connection.execute(
             'INSERT INTO merch_images (merch_id, image_url, thumbnail_url, is_primary, sort_order) VALUES (?, ?, ?, ?, ?)',
@@ -259,7 +318,6 @@ router.post('/image/:id/primary', authMiddleware, adminMiddleware, async (req, r
   try {
     const imageId = req.params.id;
     
-    // Get merch_id for this image
     const [images] = await pool.execute(
       'SELECT merch_id FROM merch_images WHERE id = ?',
       [imageId]
@@ -271,13 +329,11 @@ router.post('/image/:id/primary', authMiddleware, adminMiddleware, async (req, r
     
     const merchId = images[0].merch_id;
     
-    // Reset all images for this merch
     await pool.execute(
       'UPDATE merch_images SET is_primary = FALSE WHERE merch_id = ?',
       [merchId]
     );
     
-    // Set this image as primary
     await pool.execute(
       'UPDATE merch_images SET is_primary = TRUE WHERE id = ?',
       [imageId]

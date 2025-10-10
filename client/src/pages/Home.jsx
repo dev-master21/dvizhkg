@@ -5,7 +5,8 @@ import {
   ChevronDown, Calendar, Trophy, Image, Star,
   Sparkles, Zap, Users, ArrowRight, Play,
   MessageCircle, MapPin, Clock, ChevronLeft, ChevronRight as ChevronRightIcon,
-  Lock, Video, Package
+  Lock, Video, Package, ShoppingBag, DollarSign,
+  Search, Instagram, Send, Globe, X as CloseIcon
 } from 'lucide-react';
 import { useQuery } from 'react-query';
 import { Swiper, SwiperSlide } from 'swiper/react';
@@ -24,12 +25,19 @@ const Home = () => {
   const { isAuthenticated } = useAuthStore();
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState(null);
+  const [selectedMerchCategory, setSelectedMerchCategory] = useState('all');
+  
+  // Состояния для модального окна сообществ
+  const [showCommunitiesModal, setShowCommunitiesModal] = useState(false);
+  const [communitiesSearch, setCommunitiesSearch] = useState('');
+  const [communities, setCommunities] = useState([]);
+  const [loadingCommunities, setLoadingCommunities] = useState(false);
   
   const { scrollYProgress } = useScroll();
   const heroOpacity = useTransform(scrollYProgress, [0, 0.3], [1, 0]);
   const heroScale = useTransform(scrollYProgress, [0, 0.3], [1, 0.8]);
   
-  // Load ALL events - изменен эндпоинт для получения всех событий
+  // Load ALL events
   const { data: events = [] } = useQuery(
     ['homeEvents'],
     () => axios.get('/api/events/public/all').then(res => res.data)
@@ -51,6 +59,57 @@ const Home = () => {
     }
   );
 
+  // Загрузка товаров из базы данных
+  const { data: merchItems = [] } = useQuery(
+    ['homeMerch'],
+    () => axios.get('/api/merch').then(res => res.data),
+    { 
+      enabled: true,
+      retry: 1 
+    }
+  );
+
+  // Фильтрация товаров по категории
+  const filteredMerchItems = merchItems.filter(item => {
+    if (selectedMerchCategory === 'all') return true;
+    if (selectedMerchCategory === 'dvizh') return item.category === 'dvizh_bishkek';
+    if (selectedMerchCategory === 'official') return item.category === 'official_max_korzh';
+    return true;
+  });
+
+  // Загрузка сообществ
+  const loadCommunities = async (searchTerm = '') => {
+    setLoadingCommunities(true);
+    try {
+      const response = await axios.get('/api/communities', {
+        params: { search: searchTerm }
+      });
+      setCommunities(response.data);
+    } catch (error) {
+      console.error('Error loading communities:', error);
+    } finally {
+      setLoadingCommunities(false);
+    }
+  };
+
+  // При открытии модального окна
+  useEffect(() => {
+    if (showCommunitiesModal) {
+      loadCommunities();
+    }
+  }, [showCommunitiesModal]);
+
+  // Поиск с debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (showCommunitiesModal) {
+        loadCommunities(communitiesSearch);
+      }
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, [communitiesSearch]);
+
   useEffect(() => {
     if (videoRef.current) {
       videoRef.current.play().catch(err => console.log('Video autoplay failed:', err));
@@ -62,6 +121,16 @@ const Home = () => {
       top: window.innerHeight,
       behavior: 'smooth'
     });
+  };
+
+  const getTypeIcon = (type) => {
+    switch(type) {
+      case 'tshirt': return '👕';
+      case 'hoodie': return '🧥';
+      case 'panama': return '🧢';
+      case 'scarf': return '🧣';
+      default: return '📦';
+    }
   };
 
   return (
@@ -197,7 +266,7 @@ const Home = () => {
         </div>
       </motion.section>
 
-      {/* Events Carousel Section - ИЗМЕНЕНО: отображение всех событий */}
+      {/* Events Carousel Section */}
       <section className="relative py-20 px-4 bg-gradient-to-b from-black to-[#0a0a0a]">
         <div className="container mx-auto">
           <motion.div
@@ -259,7 +328,6 @@ const Home = () => {
                 ))}
               </Swiper>
 
-              {/* Custom Navigation Buttons */}
               <button className="swiper-button-prev-custom absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-10 p-2 bg-[#f9c200] text-black rounded-full hover:bg-[#ffdd44] transition">
                 <ChevronLeft size={24} />
               </button>
@@ -302,7 +370,7 @@ const Home = () => {
         </div>
       </section>
 
-      {/* Media Section - ТЕПЕРЬ ИДЕТ ПЕРЕД TOP USERS */}
+      {/* Media Section */}
       <section className="relative py-20 px-4 bg-gradient-to-b from-[#0a0a0a] to-black">
         <div className="container mx-auto">
           <motion.div
@@ -361,7 +429,6 @@ const Home = () => {
                     </motion.div>
                   ))
                 ) : (
-                  // Fallback если нет медиа
                   [...Array(8)].map((_, i) => (
                     <motion.div
                       key={i}
@@ -415,8 +482,8 @@ const Home = () => {
         </div>
       </section>
 
-      {/* Merch Section - НОВЫЙ БЛОК */}
-      <section className="relative py-20 px-4">
+      {/* Merch Section - ОБНОВЛЕННАЯ ВЕРСИЯ С КАРУСЕЛЬЮ ИЗ БД */}
+      <section className="relative py-20 px-4 bg-gradient-to-b from-black to-[#0a0a0a]">
         <div className="container mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 50 }}
@@ -432,89 +499,190 @@ const Home = () => {
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-            {/* DVIZH BISHKEK Card */}
-            <motion.div
-              initial={{ opacity: 0, x: -30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#2a2a2a] to-[#1d1d1d] border border-[#3a3a3a] hover:border-[#f9c200]/30 transition-all"
-            >
-              <div className="p-8">
-                <div className="mb-6">
-                  <Sparkles className="text-[#f9c200] mb-4" size={48} />
-                  <h3 className="text-2xl font-black text-white mb-2 uppercase">
-                    DVIZH BISHKEK
-                  </h3>
-                  <p className="text-gray-400">
-                    Футболки, худи и панамки с символикой движухи
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2 mb-6">
-                  <span className="px-3 py-1 bg-[#f9c200]/20 text-[#f9c200] rounded-lg text-xs font-bold uppercase">
-                    2 РЕВИЗИИ
-                  </span>
-                  <span className="px-3 py-1 bg-black/30 text-gray-300 rounded-lg text-xs font-bold uppercase">
-                    ФУТБОЛКИ
-                  </span>
-                  <span className="px-3 py-1 bg-black/30 text-gray-300 rounded-lg text-xs font-bold uppercase">
-                    ХУДИ
-                  </span>
-                  <span className="px-3 py-1 bg-black/30 text-gray-300 rounded-lg text-xs font-bold uppercase">
-                    ПАНАМКИ
-                  </span>
-                </div>
-                <Link
-                  to="/merch?category=dvizh_bishkek"
-                  className="inline-flex items-center gap-2 text-[#f9c200] hover:text-[#ffdd44] transition font-bold uppercase"
+          {/* Переключатель категорий */}
+          <div className="flex justify-center mb-8">
+            <div className="inline-flex bg-black/30 backdrop-blur rounded-2xl p-1 border border-[#3a3a3a]">
+              {[
+                { id: 'all', label: 'ВСЕ' },
+                { id: 'dvizh', label: 'НАШ МЕРЧ' },
+                { id: 'official', label: 'ОФИЦИАЛЬНЫЙ МЕРЧ' }
+              ].map((category) => (
+                <button
+                  key={category.id}
+                  onClick={() => setSelectedMerchCategory(category.id)}
+                  className={`px-4 sm:px-6 py-2 sm:py-3 rounded-xl font-bold uppercase transition-all text-sm sm:text-base ${
+                    selectedMerchCategory === category.id
+                      ? 'bg-[#f9c200] text-black'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
                 >
-                  <span>СМОТРЕТЬ КОЛЛЕКЦИЮ</span>
-                  <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
-                </Link>
-              </div>
-              <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-[#f9c200]/10 rounded-full blur-3xl" />
-            </motion.div>
-
-            {/* MAX KORZH Card */}
-            <motion.div
-              initial={{ opacity: 0, x: 30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-900/20 to-pink-900/20 border border-purple-500/30 hover:border-purple-500/50 transition-all"
-            >
-              <div className="p-8">
-                <div className="mb-6">
-                  <Star className="text-purple-400 mb-4" size={48} />
-                  <h3 className="text-2xl font-black text-white mb-2 uppercase">
-                    OFFICIAL MAX KORZH
-                  </h3>
-                  <p className="text-gray-400">
-                    Официальный мерч: худи и шарфы
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2 mb-6">
-                  <span className="px-3 py-1 bg-purple-500/20 text-purple-400 rounded-lg text-xs font-bold uppercase">
-                    ЭКСКЛЮЗИВ
-                  </span>
-                  <span className="px-3 py-1 bg-black/30 text-gray-300 rounded-lg text-xs font-bold uppercase">
-                    ХУДИ
-                  </span>
-                  <span className="px-3 py-1 bg-black/30 text-gray-300 rounded-lg text-xs font-bold uppercase">
-                    ШАРФЫ
-                  </span>
-                </div>
-                <Link
-                  to="/merch?category=official_max_korzh"
-                  className="inline-flex items-center gap-2 text-purple-400 hover:text-purple-300 transition font-bold uppercase"
-                >
-                  <span>СМОТРЕТЬ КОЛЛЕКЦИЮ</span>
-                  <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
-                </Link>
-              </div>
-              <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-purple-500/10 rounded-full blur-3xl" />
-            </motion.div>
+                  {category.label}
+                </button>
+              ))}
+            </div>
           </div>
 
+          {/* Карусель товаров */}
+          {filteredMerchItems.length > 0 ? (
+            <div className="relative">
+              <Swiper
+                modules={[Navigation, Pagination]}
+                spaceBetween={20}
+                slidesPerView={1}
+                navigation={{
+                  prevEl: '.merch-prev',
+                  nextEl: '.merch-next',
+                }}
+                pagination={{ 
+                  clickable: true,
+                  bulletClass: 'swiper-pagination-bullet !bg-gray-600',
+                  bulletActiveClass: 'swiper-pagination-bullet-active !bg-[#f9c200]'
+                }}
+                breakpoints={{
+                  640: { slidesPerView: 2, spaceBetween: 20 },
+                  768: { slidesPerView: 3, spaceBetween: 24 },
+                  1024: { slidesPerView: 4, spaceBetween: 30 }
+                }}
+                className="!pb-12"
+              >
+                {filteredMerchItems.map((item, index) => (
+                  <SwiperSlide key={item.id}>
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      whileInView={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="h-full"
+                    >
+                      <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#2a2a2a] to-[#1d1d1d] border border-[#3a3a3a] hover:border-[#f9c200]/30 transition-all hover:scale-[1.02] h-full flex flex-col">
+                        {/* Изображение товара */}
+                        <div className="relative h-64 sm:h-72 bg-black/50 overflow-hidden">
+                          {item.images && item.images.length > 0 ? (
+                            <img 
+                              src={`${import.meta.env.VITE_API_URL}${item.images[0].url}`}
+                              alt={item.title}
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Package className="text-gray-600" size={48} />
+                            </div>
+                          )}
+                          
+                          {/* Бейджи */}
+                          {item.category === 'official_max_korzh' && (
+                            <div className="absolute top-3 left-3 px-3 py-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs font-bold rounded-lg flex items-center gap-1">
+                              <Star size={12} />
+                              OFFICIAL
+                            </div>
+                          )}
+                          
+                          {item.category === 'dvizh_bishkek' && item.revision && (
+                            <div className="absolute top-3 right-3 px-3 py-1 bg-black/70 backdrop-blur text-[#f9c200] text-xs font-bold rounded-lg">
+                              REV {item.revision}
+                            </div>
+                          )}
+
+                          {/* Тип товара */}
+                          <div className="absolute bottom-3 left-3 text-2xl">
+                            {getTypeIcon(item.type)}
+                          </div>
+
+                          {/* Статус товара */}
+                          {item.status === 'out_of_stock' && (
+                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                              <div className="px-4 py-2 bg-red-500 text-white font-bold rounded-lg uppercase">
+                                НЕТ В НАЛИЧИИ
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Контент карточки */}
+                        <div className="p-4 sm:p-6 flex-1 flex flex-col">
+                          <h3 className="text-lg sm:text-xl font-bold text-white mb-2 uppercase line-clamp-1">
+                            {item.title}
+                          </h3>
+                          {item.description && (
+                            <p className="text-gray-400 text-sm mb-4 line-clamp-2">
+                              {item.description}
+                            </p>
+                          )}
+                          
+                          {/* Размеры */}
+                          {item.available_sizes && item.available_sizes.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mb-4">
+                              {item.sizes?.map((size) => (
+                                <span
+                                  key={size}
+                                  className={`px-2 py-1 rounded text-xs font-bold ${
+                                    item.available_sizes.includes(size)
+                                      ? 'bg-[#f9c200]/20 text-[#f9c200] border border-[#f9c200]/30'
+                                      : 'bg-gray-800 text-gray-500 line-through'
+                                  }`}
+                                >
+                                  {size}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Цена и кнопка */}
+                          <div className="flex items-center justify-between mt-auto pt-4 border-t border-[#3a3a3a]">
+                            <div className="flex items-center gap-1">
+                              <DollarSign className="text-[#f9c200]" size={18} />
+                              <span className="text-xl sm:text-2xl font-black text-white">
+                                {item.price}
+                              </span>
+                              <span className="text-sm text-gray-400">СОМ</span>
+                            </div>
+                            
+                            {item.status === 'available' ? (
+                              <Link
+                                to="/merch"
+                                className="px-3 sm:px-4 py-1.5 sm:py-2 bg-[#f9c200] text-black font-bold rounded-xl hover:bg-[#ffdd44] transition uppercase text-xs sm:text-sm"
+                              >
+                                ЗАКАЗАТЬ
+                              </Link>
+                            ) : (
+                              <span className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-700 text-gray-400 font-bold rounded-xl uppercase text-xs sm:text-sm">
+                                НЕТ
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  </SwiperSlide>
+                ))}
+              </Swiper>
+              
+              {/* Кнопки навигации */}
+              <button className="merch-prev absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-10 p-2 bg-[#f9c200] text-black rounded-full hover:bg-[#ffdd44] transition">
+                <ChevronLeft size={24} />
+              </button>
+              <button className="merch-next absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-10 p-2 bg-[#f9c200] text-black rounded-full hover:bg-[#ffdd44] transition">
+                <ChevronRightIcon size={24} />
+              </button>
+            </div>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              className="text-center py-20"
+            >
+              <ShoppingBag className="text-gray-600 mx-auto mb-6" size={80} />
+              <h3 className="text-2xl font-bold text-gray-400 mb-3 uppercase">
+                {selectedMerchCategory === 'dvizh' 
+                  ? 'НАШ МЕРЧ СКОРО ПОЯВИТСЯ' 
+                  : selectedMerchCategory === 'official'
+                  ? 'ОФИЦИАЛЬНЫЙ МЕРЧ СКОРО ПОЯВИТСЯ'
+                  : 'ТОВАРЫ СКОРО ПОЯВЯТСЯ'}
+              </h3>
+            </motion.div>
+          )}
+
+          {/* Кнопка перехода на страницу мерча */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -525,7 +693,7 @@ const Home = () => {
               to="/merch"
               className="inline-flex items-center gap-3 px-8 py-4 bg-[#f9c200] text-black font-bold rounded-2xl hover:bg-[#ffdd44] transition-all transform hover:scale-105 uppercase"
             >
-              <Package  size={24} />
+              <Package size={24} />
               <span>ВЕСЬ МЕРЧ</span>
               <ArrowRight size={20} />
             </Link>
@@ -567,7 +735,7 @@ const Home = () => {
         </section>
       )}
 
-      {/* Top Users Section - ПЕРЕМЕЩЕНО В САМЫЙ НИЗ */}
+      {/* Top Users Section */}
       <section className="relative py-20 px-4 bg-gradient-to-t from-[#0a0a0a] to-black">
         <div className="container mx-auto max-w-4xl">
           <motion.div
@@ -593,6 +761,146 @@ const Home = () => {
           </motion.div>
         </div>
       </section>
+
+      {/* Кнопка ДРУГИЕ ДВИЖУХИ */}
+      <section className="relative py-20 px-4">
+        <div className="container mx-auto max-w-4xl">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true }}
+            className="text-center"
+          >
+            <button
+              onClick={() => setShowCommunitiesModal(true)}
+              className="group relative inline-flex items-center gap-4 px-12 py-6 bg-gradient-to-r from-[#f9c200] to-[#ffdd44] text-black font-black text-xl rounded-3xl hover:scale-105 transition-all transform uppercase shadow-2xl hover:shadow-[#f9c200]/50"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-[#f9c200] to-[#ffdd44] rounded-3xl blur-xl opacity-50 group-hover:opacity-75 transition-opacity" />
+              <Globe className="relative" size={28} />
+              <span className="relative">ДРУГИЕ ДВИЖУХИ</span>
+              <ArrowRight className="relative group-hover:translate-x-1 transition-transform" size={24} />
+            </button>
+            <p className="text-gray-400 mt-4 uppercase">
+              Движухи по всему миру
+            </p>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Модальное окно с сообществами */}
+      <AnimatePresence>
+        {showCommunitiesModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowCommunitiesModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] rounded-3xl max-w-4xl w-full max-h-[85vh] overflow-hidden border border-[#3a3a3a]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="sticky top-0 bg-gradient-to-r from-[#1a1a1a] to-[#0a0a0a] p-6 border-b border-[#3a3a3a] z-10">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-3xl font-black text-white uppercase">
+                    ДВИЖУХИ ПО ВСЕМУ МИРУ
+                  </h2>
+                  <button
+                    onClick={() => setShowCommunitiesModal(false)}
+                    className="p-2 hover:bg-white/10 rounded-xl transition"
+                  >
+                    <CloseIcon className="text-gray-400 hover:text-white" size={24} />
+                  </button>
+                </div>
+                
+                {/* Поиск */}
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                  <input
+                    type="text"
+                    value={communitiesSearch}
+                    onChange={(e) => setCommunitiesSearch(e.target.value)}
+                    placeholder="Поиск по городам и странам..."
+                    className="w-full pl-12 pr-4 py-3 bg-black/50 text-white rounded-2xl border border-[#3a3a3a] focus:border-[#f9c200] outline-none transition"
+                  />
+                </div>
+              </div>
+
+              {/* Список сообществ */}
+              <div className="p-6 overflow-y-auto max-h-[calc(85vh-180px)]">
+                {loadingCommunities ? (
+                  <div className="flex items-center justify-center py-20">
+                    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#f9c200]"></div>
+                  </div>
+                ) : communities.length > 0 ? (
+                  <div className="grid gap-3">
+                    {communities.map((community) => (
+                      <motion.div
+                        key={community.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="flex items-center justify-between p-4 bg-black/30 rounded-2xl border border-[#3a3a3a] hover:border-[#f9c200]/30 transition-all"
+                      >
+                        <div className="flex-1">
+                          <h3 className="text-white font-bold text-lg">
+                            {community.name}
+                          </h3>
+                          <p className="text-gray-400 text-sm">
+                            {community.city_ru || community.city}
+                            {community.country_ru && `, ${community.country_ru}`}
+                          </p>
+                        </div>
+                        
+                        <div className="flex gap-2">
+                          {community.instagram && (
+                            
+                             <a href={`https://instagram.com/${community.instagram.replace('@', '')}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-2 bg-gradient-to-tr from-purple-600 to-pink-600 rounded-xl hover:scale-110 transition-transform"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Instagram className="text-white" size={20} />
+                            </a>
+                          )}
+                          {community.telegram && (
+                            
+                             <a href={community.telegram.startsWith('http') ? community.telegram : `https://${community.telegram}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-2 bg-[#0088cc] rounded-xl hover:scale-110 transition-transform"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Send className="text-white" size={20} />
+                            </a>
+                          )}
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-20">
+                    <Globe className="text-gray-600 mx-auto mb-4" size={60} />
+                    <p className="text-gray-400 text-lg">Сообщества не найдены</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="sticky bottom-0 bg-gradient-to-r from-[#1a1a1a] to-[#0a0a0a] p-4 border-t border-[#3a3a3a] text-center">
+                <p className="text-gray-500 text-sm">
+                  Найдено сообществ: {communities.length}
+                </p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

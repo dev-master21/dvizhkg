@@ -28,7 +28,7 @@ const Events = () => {
   const { data: events = [], isLoading, refetch } = useQuery(
     ['events'],
     () => {
-      const endpoint = isAuthenticated ? '/api/events' : '/api/events/public';
+    const endpoint = isAuthenticated ? '/api/events' : '/api/events/public/all';
       return axios.get(endpoint).then(res => res.data);
     },
     {
